@@ -1,0 +1,12 @@
+idf_component_register(
+    SRCS
+        "pump_channel/pump_channel.c"
+        "pump_manager/pump_manager.c"
+        "unit_converter/unit_converter.c"
+    INCLUDE_DIRS
+        "."
+        "pump_channel"
+        "pump_manager"
+        "unit_converter"
+    REQUIRES driver freertos esp_driver_gpio drivers motion domain esp_timer
+)

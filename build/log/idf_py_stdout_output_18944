@@ -1,0 +1,75 @@
+Command: D:\pc\ESP-IDF\Env\Espressif\python_env\idf5.5_py3.11_env\Scripts\python.exe D:\pc\ESP-IDF\Env\Espressif\frameworks\esp-idf-v5.5.1\tools/idf_monitor.py -p COM10 -b 115200 --toolchain-prefix xtensa-esp32-elf- --target esp32 --revision 0 D:\pc\Documents\Micropump\Newversion\idf\Dual_Syringe_pump_idf\build\Syringe_pump.elf D:\pc\Documents\Micropump\Newversion\idf\Dual_Syringe_pump_idf\build\bootloader\bootloader.elf --force-color -m 'D:\pc\ESP-IDF\Env\Espressif\python_env\idf5.5_py3.11_env\Scripts\python.exe' 'D:\pc\ESP-IDF\Env\Espressif\frameworks\esp-idf-v5.5.1\tools\idf.py' '-p' 'COM10'
+ets Jul 29 2019 12:21:46
+
+rst:0x1 (POWERON_RESET),boot:0x12 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6380
+ho 0 tail 12 room 4
+load:0x40078000,len:15916
+load:0x40080400,len:3860
+entry 0x40080638
+[0;32mI (29) boot: ESP-IDF HEAD-HASH-NOTFOUND 2nd stage bootloader[0m
+[0;32mI (29) boot: compile time Apr 24 2026 22:17:34[0m
+[0;32mI (29) boot: Multicore bootloader[0m
+[0;32mI (32) boot: chip revision: v3.1[0m
+[0;32mI (34) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (38) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (42) boot.esp32: SPI Flash Size : 2MB[0m
+[0;32mI (45) boot: Enabling RNG early entropy source...[0m
+[0;32mI (50) boot: Partition Table:[0m
+[0;32mI (52) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (59) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (65) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (72) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (78) boot: End of partition table[0m
+[0;32mI (82) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=0a8e8h ( 43240) map[0m
+[0;32mI (104) esp_image: segment 1: paddr=0001a910 vaddr=3ffb0000 size=023f8h (  9208) load[0m
+[0;32mI (107) esp_image: segment 2: paddr=0001cd10 vaddr=40080000 size=03308h ( 13064) load[0m
+[0;32mI (113) esp_image: segment 3: paddr=00020020 vaddr=400d0020 size=15c34h ( 89140) map[0m
+[0;32mI (146) esp_image: segment 4: paddr=00035c5c vaddr=40083308 size=0a420h ( 42016) load[0m
+[0;32mI (162) esp_image: segment 5: paddr=00040084 vaddr=50000000 size=00020h (    32) load[0m
+[0;32mI (169) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (169) boot: Disabling RNG early entropy source...[0m
+[0;32mI (180) cpu_start: Multicore app[0m
+[0;32mI (189) cpu_start: Pro cpu start user code[0m
+[0;32mI (189) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (189) app_init: Application information:[0m
+[0;32mI (189) app_init: Project name:     Syringe_pump[0m
+[0;32mI (193) app_init: App version:      1[0m
+[0;32mI (197) app_init: Compile time:     Apr 24 2026 22:17:02[0m
+[0;32mI (202) app_init: ELF file SHA256:  83be1ada6...[0m
+[0;32mI (206) app_init: ESP-IDF:          HEAD-HASH-NOTFOUND[0m
+[0;32mI (211) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (215) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (219) efuse_init: Chip rev:         v3.1[0m
+[0;32mI (223) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (229) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (234) heap_init: At 3FFB2E10 len 0002D1F0 (180 KiB): DRAM[0m
+[0;32mI (239) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (245) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (250) heap_init: At 4008D728 len 000128D8 (74 KiB): IRAM[0m
+[0;32mI (257) spi_flash: detected chip: generic[0m
+[0;32mI (259) spi_flash: flash io: dio[0m
+[0;33mW (262) spi_flash: Detected size(4096k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;32mI (275) main_task: Started on CPU0[0m
+[0;32mI (285) main_task: Calling app_main()[0m
+[0;32mI (285) PUMP_MGR: Pump Manager Initialized[0m
+[0;32mI (285) MAIN_APP: System State Initialized[0m
+[0;32mI (285) MAIN_APP: Configuring Pump Parameters...[0m
+[0;32mI (285) PUMP_CH: Sync: Target 7701955 steps, Total Time: 59999.52 s, c0: 1889[0m
+[0;32mI (295) PUMP_CH: Starting Trapezoidal profile...[0m
+[0;32mI (295) PUMP_MGR: Channel 0 started[0m
+[0;32mI (305) MAIN_APP: Starting System...[0m
+[0;32mI (305) MAIN_APP: CH0 | Vol: 0.0000/1.00 ml | Flow: 0.2474 ml/h | Time: 0.0/59999.5 s | S:1 Stp:1[0m
+[0;32mI (1315) MAIN_APP: CH0 | Vol: 0.0000/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:133[0m
+[0;32mI (2315) MAIN_APP: CH0 | Vol: 0.0000/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:261[0m
+[0;32mI (3315) MAIN_APP: CH0 | Vol: 0.0001/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:389[0m
+[0;32mI (4315) MAIN_APP: CH0 | Vol: 0.0001/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:517[0m
+[0;32mI (5315) MAIN_APP: CH0 | Vol: 0.0001/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:645[0m
+[0;32mI (6315) MAIN_APP: CH0 | Vol: 0.0001/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:773[0m
+[0;32mI (7315) MAIN_APP: CH0 | Vol: 0.0001/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:905[0m
+[0;32mI (8315) MAIN_APP: CH0 | Vol: 0.0001/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:1033[0m
+[0;32mI (9315) MAIN_APP: CH0 | Vol: 0.0002/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:1161[0m
+[0;32mI (10315) MAIN_APP: CH0 | Vol: 0.0002/1.00 ml | Flow: 0.0600 ml/h | Time: 0.0/59999.5 s | S:1 Stp:1289[0m
