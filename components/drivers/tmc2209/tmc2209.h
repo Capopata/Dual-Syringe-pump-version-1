@@ -7,14 +7,20 @@
 #include "esp_log.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
+#include "io_config.h"
 
-#define TXD_PIN                 5
-#define RXD_PIN                 17
+// node_addr luôn = 0x00 vì mỗi driver độc quyền trên UART của nó
+#define TMC_NODE_ADDR       0x00
 #define RX_BUF_SIZE             512
+
 
 // define UART basic parameter
 #define TMC2209_WRITE_BIT       0x80
 #define TMC2209_SYNC_BYTE       0x05
+
+#define TMC2209_REG_DRV_STATUS 0x6F
+#define TMC2209_REG_GSTAT      0x01
+#define TMC2209_REG_DRV_STATUS 0x6F
 
 /* MAIN REGISTER ADDRESS OF TMC2209 */
 /* Global configuration */
@@ -71,12 +77,15 @@
 
 
 /*HEADER FUNCTION*/
-
-uint32_t TMC2209_ReadRegister(uint8_t node_addr, uint8_t reg_addr);
-void TMC2209_WriteRegister(uint8_t node_addr, uint8_t reg_addr, uint32_t data);
-void TMC2209_TuneStallGuard(uint8_t node_addr);
-void TMC_Init(uint8_t node_addr);
-
-
-
+void uart_loopback_test(uart_port_t port, int tx_pin, int rx_pin);
+uint32_t TMC2209_ReadRegister(uart_port_t port, uint8_t node_addr, uint8_t reg_addr);
+void TMC2209_WriteRegister(uart_port_t port,uint8_t node_addr,
+                            uint8_t reg_addr, uint32_t data);
+void TMC2209_TuneStallGuard(uart_port_t port, uint8_t node_addr);
+void TMC_Init(uart_port_t port, uint8_t node_addr);
+esp_err_t uart_init(uart_port_t port, int tx_pin, int rx_pin);
+void check_chip_alive(uart_port_t port, uint8_t node_addr);
+void TMC2209_Check_DRV_STATUS(uart_port_t port, uint8_t node_addr);
+void TMC2209_Full_Report(uart_port_t port, uint8_t node_addr);
+void test_tmc_override(uart_port_t port, uint8_t node_addr);
 #endif

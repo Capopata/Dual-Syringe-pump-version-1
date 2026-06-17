@@ -1,7 +1,34 @@
 #include "unit_converter.h"
 #include <math.h>
 static float freq_error_accumulator = 0.0f;
+// Thêm vào file unit_converter.c
+// 3. Hàm nội suy tuyến tính cơ bản
+static float interpolate_calib(const calib_point_t *table, int size, float flow) {
+    if (flow <= table[0].flow_rate) return table[0].calib_factor;
+    if (flow >= table[size-1].flow_rate) return table[size-1].calib_factor;
 
+    for (int i = 0; i < size - 1; i++) {
+        if (flow >= table[i].flow_rate && flow <= table[i+1].flow_rate) {
+            float f1 = table[i].flow_rate;
+            float k1 = table[i].calib_factor;
+            float f2 = table[i+1].flow_rate;
+            float k2 = table[i+1].calib_factor;
+            
+            return k1 + (flow - f1) * (k2 - k1) / (f2 - f1);
+        }
+    }
+    return 1.0f; 
+}
+
+// 4. Hàm giao tiếp gọi từ bên ngoài
+float get_dynamic_calib_factor(int channel_id, float target_flow) {
+    if (channel_id == 0) {
+        return interpolate_calib(ch0_calib_table, CH0_TABLE_SIZE, target_flow);
+    } else if (channel_id == 1) {
+        return interpolate_calib(ch1_calib_table, CH1_TABLE_SIZE, target_flow);
+    }
+    return 1.0f;
+}
 uint32_t converter_ml_to_steps(float target_ml) {
     if (target_ml <= 0.0f) return 0;
     // Chuyển đổi và làm tròn thành số nguyên
@@ -56,4 +83,29 @@ int32_t converter_calculate_pid_error(uint32_t expected_steps, int32_t actual_en
     // Nếu error > 0: Motor đang chạy chậm hơn lý thuyết -> PID cần bù dương
     // Nếu error < 0: Motor chạy lố (hiếm khi xảy ra có tải) -> PID bù âm
     return (int32_t)expected_steps - actual_steps;
+}
+
+float converter_steps_to_degree(int32_t steps){
+    float steps_per_rev = 51200.0f;
+
+    return ((float)steps *360.0f)/(steps_per_rev);
+
+}
+
+//  Chuyển đổi số bước (steps) lý thuyết sang thể tích (mL)
+float converter_steps_to_ml(int32_t steps) {
+    return (float)steps * ML_PER_STEP;
+}
+
+//  Chuyển đổi góc đo được từ cảm biến (degree) sang thể tích (mL)
+float converter_degree_to_ml(float degree) {
+    // 1 vòng = 360 độ = 51200 steps
+    // Số bước tương ứng với góc quay = degree * (51200.0f / 360.0f)
+    float steps_from_degree = degree * 142.222222f; 
+    return steps_from_degree * ML_PER_STEP;
+}
+
+//  (Mở rộng) Nếu bạn muốn tính thẳng từ giá trị raw tick (0-4095) của AS5600
+float converter_tick_to_ml(int32_t ticks) {
+    return (float)ticks * STEPS_PER_ENCODER_TICK * ML_PER_STEP;
 }

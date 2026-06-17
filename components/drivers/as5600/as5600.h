@@ -13,10 +13,8 @@
 #define AS5600_STATUS_MH   (1 << 3)
 
 #define AS5600_SENSOR_ADDR         0x36 
-#define I2C_MASTER_SCL_IO           22       /*!< GPIO number used for I2C master clock */
-#define I2C_MASTER_SDA_IO           21       /*!< GPIO number used for I2C master data  */
 #define I2C_MASTER_NUM              I2C_NUM_0                   /*!< I2C port number for master dev */
-#define I2C_MASTER_FREQ_HZ          100000 /*!< I2C master clock frequency */
+#define I2C_MASTER_FREQ_HZ          100000                      /*!< I2C master clock frequency */
 #define I2C_MASTER_TX_BUF_DISABLE   0                           /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                           /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_TIMEOUT_MS       1000
@@ -45,12 +43,26 @@ typedef enum {
 typedef struct {
     i2c_master_dev_handle_t dev;
 }as5600_t;
+typedef struct {
+    float last_raw_degree;
+    float accumulated_angle;
+    bool is_started;
+    uint16_t last_raw;
+} as5600_logic_t;
 
+// Hàm khởi tạo/reset logic
+void as5600_logic_reset(as5600_logic_t *logic);
+
+// Hàm xử lý chính
+void as5600_process_multi_turn(as5600_t *dev, as5600_logic_t *logic, float *display_angle, bool is_running);
 esp_err_t as5600_init(as5600_t *sensor, i2c_master_dev_handle_t dev);
 esp_err_t as5600_read_raw_angle(as5600_t *sensor, uint16_t *angle);
 esp_err_t as5600_read_angle(as5600_t *sensor, uint16_t *angle);
 esp_err_t as5600_config_slow_filter(as5600_t *sensor);
 esp_err_t as5600_disable_filter(as5600_t *sensor);
 esp_err_t as5600_read_status(as5600_t *sensor, uint8_t *status );
-void i2c_master_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_t *dev_handle);
+void i2c_master_init(i2c_master_bus_handle_t *bus_handle, 
+                     i2c_master_dev_handle_t *dev_handle,
+                     i2c_port_t port,
+                     int sda, int scl);
 void read_angle_task(void *arg);

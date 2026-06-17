@@ -4,11 +4,24 @@ idf_component_register(
         "tft/tft.c"
         "tmc2209/tmc2209.c"
         "button/button.c"
+        "pcf8574/pcf8574.c"
     INCLUDE_DIRS
         "."
         "as5600"
         "tft"
         "tmc2209"
         "button"
-    REQUIRES driver freertos esp_driver_gpio esp_driver_rmt esp_timer domain
+        "pcf8574"
+    REQUIRES 
+        driver 
+        freertos 
+        esp_driver_gpio 
+        esp_driver_rmt 
+        esp_timer 
+        domain
+        esp_lcd
+        lvgl__lvgl
+        app
+    PRIV_REQUIRES
+        espressif__esp_lcd_ili9341
 )

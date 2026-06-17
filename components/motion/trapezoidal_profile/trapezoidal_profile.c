@@ -29,7 +29,7 @@ void profile_move_to(trapezoidal_profile_t *p, long absolute_pos){
     }
 }
 
-uint32_t IRAM_ATTR profile_compute_nex_step_interval(trapezoidal_profile_t *p) {
+uint32_t profile_compute_nex_step_interval(trapezoidal_profile_t *p) {
     long distance_to = p->target_pos - p->current_pos;
 
     if (distance_to == 0) {
@@ -59,11 +59,10 @@ uint32_t IRAM_ATTR profile_compute_nex_step_interval(trapezoidal_profile_t *p) {
         }
     }
 
-    // 3. Thuật toán David Austin - Tính cn cho bước tiếp theo
+    // Thuật toán David Austin - Tính time interval(cn) cho bước tiếp theo
     if (p->n == 0) {
         p->cn = p->c0; 
     } else {
-        // Sử dụng toàn bộ hậu tố f để chạy FPU phần cứng
         float denominator = (4.0f * p->n) + 1.0f;
         
         // Bảo vệ mẫu số không được bằng 0

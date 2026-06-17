@@ -1,108 +1,115 @@
 #include "button.h"
+#include "pcf8574.h"
 
 static const char *TAG = "BUTTON";
 
-#define BUTTON_COUNT 5
+#define PCF_BTN_SELECT  1
+#define PCF_BTN_UP      0
+#define PCF_BTN_DOWN    4
+#define PCF_BTN_LEFT    3
+#define PCF_BTN_RIGHT   2
 
-QueueHandle_t g_button_queue;
-QueueHandle_t g_change_sys; 
-
-static void IRAM_ATTR button_isr(void *arg){
-    uint32_t gpio_num = (uint32_t)(uintptr_t)arg;
-    
-    BaseType_t Woken = pdFALSE;
-    xQueueSendFromISR(g_button_queue, &gpio_num, &Woken);
-
-
-    portYIELD_FROM_ISR(Woken);
+void button_init(void) {
+    ESP_LOGI(TAG, "Button initialized in Polling Mode (No ISR, No Queue)");
 }
 
-void button_init(void)
-{
-    g_button_queue = xQueueCreate(15, sizeof(uint32_t));
-
-    if(g_button_queue == NULL)
-    {
-        ESP_LOGE(TAG, "Queue create FAILED");
-        return;
+static bool pcf_pin_to_event(uint8_t pin, system_event_t *evt) {
+    switch (pin) {
+        case PCF_BTN_SELECT: *evt = EVENT_SELECT; return true;
+        case PCF_BTN_UP:     *evt = EVENT_UP;     return true;
+        case PCF_BTN_DOWN:   *evt = EVENT_DOWN;   return true;
+        case PCF_BTN_LEFT:   *evt = EVENT_LEFT;   return true;
+        case PCF_BTN_RIGHT:  *evt = EVENT_RIGHT;  return true;
+        default: return false;
     }
-
-    ESP_LOGI(TAG, "Queue created");
-
-    gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_NEGEDGE,   // nhấn = xuống mức thấp
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = 1,
-        .pull_down_en = 0,
-    };
-
-    gpio_install_isr_service(0);
-
-    uint8_t pins[BUTTON_COUNT] = {BTN_SELECT_PIN, BTN_UP_PIN, BTN_DOWN_PIN,BTN_LEFT_PIN, BTN_RIGHT_PIN};
-
-    for(int i = 0; i < BUTTON_COUNT; i++)
-    {
-        io_conf.pin_bit_mask = (1ULL << pins[i]);
-        gpio_config(&io_conf);
-
-        gpio_isr_handler_add(pins[i], button_isr, (void*)(uintptr_t)pins[i]);
-    }
-    ESP_LOGI(TAG, "Button initialized!");
 }
-void button_task(void *arg)
-{
-    system_state_t *g_system_state = (system_state_t *)arg;
-    uint32_t gpio_num;
-    while(1)
-    {
-        if(xQueueReceive(g_button_queue, &gpio_num, portMAX_DELAY))
-        {
-            vTaskDelay(pdMS_TO_TICKS(50));   // debounce
 
-            if(gpio_get_level(gpio_num) == 0) // vẫn đang nhấn
-            {
-                switch(gpio_num)
-                {
-                    case BTN_SELECT_PIN:
-                    {
-                        printf("SELECT pressed\t");
-                        //system_event_t ev = EVENT_RUN_TOGGLE;
-                       //xQueueSend(g_change_sys, &ev, 0);
-                        break;
+static const char *event_name(system_event_t evt) {
+    switch (evt) {
+        case EVENT_SELECT: return "SELECT";
+        case EVENT_UP:     return "UP";
+        case EVENT_DOWN:   return "DOWN";
+        case EVENT_LEFT:   return "LEFT";
+        case EVENT_RIGHT:  return "RIGHT";
+        default:           return "UNKNOWN";
+    }
+}
+
+void button_task(void *arg) {
+    system_state_t *sys = (system_state_t *)arg;
+    ESP_LOGI(TAG, "Button task started (POLLING MODE - 40ms ticks)");
+
+    uint8_t prev_state = 0xFF; // HIGH = nhả nút, LOW = nhấn nút
+    int consecutive_failures = 0;
+
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(40)); // Tần số quét 40ms cực kỳ tiết kiệm điện và chống nhiễu tuyệt đối
+
+        uint8_t pcf_state = 0xFF;
+        if (pcf8574_read(&pcf_state) != ESP_OK) {
+            consecutive_failures++;
+            
+            // TỰ SỬA LỖI (Self-Healing): Nếu xảy ra 3 lần lỗi liên tiếp, thực hiện quét động I2C
+            // để tìm và đăng ký lại PCF8574 với địa chỉ chính xác trên bus!
+            if (consecutive_failures == 3) {
+                ESP_LOGW(TAG, "PCF8574 read failed 3 times consecutively. Attempting dynamic auto-scan & recovery...");
+                if (pcf8574_probe_and_reinit() == ESP_OK) {
+                    ESP_LOGI(TAG, "Dynamic auto-recovery SUCCEEDED! Resuming button operations.");
+                    consecutive_failures = 0;
+                    continue;
+                }
+            }
+
+            if (consecutive_failures < 5) {
+                ESP_LOGE(TAG, "PCF8574 read FAILED — check I2C wiring! (attempt %d/5)", consecutive_failures);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+            } else {
+                if (consecutive_failures == 5) {
+                    ESP_LOGE(TAG, "PCF8574 read FAILED consecutively! Throttling warning to every 5 seconds.");
+                }
+                vTaskDelay(pdMS_TO_TICKS(5000));
+            }
+            continue;
+        }
+        consecutive_failures = 0;
+
+        // Phát hiện sườn xuống (nhả sang nhấn): Bit nào ở prev_state là 1 (nhả) mà ở pcf_state là 0 (nhấn)
+        uint8_t pressed_mask = prev_state & (~pcf_state);
+        prev_state = pcf_state;
+
+        if (pressed_mask == 0) {
+            continue;
+        }
+
+        for (uint8_t pin = 0; pin < 8; pin++) {
+            if (pressed_mask & (1 << pin)) {
+                system_event_t evt;
+                if (!pcf_pin_to_event(pin, &evt)) continue;
+
+                ESP_LOGI(TAG, ">>> Button pressed: pin=%d event=%s screen=%d",
+                         pin, event_name(evt), sys->ui.screen);
+
+                if (tft_lock(pdMS_TO_TICKS(100))) {
+                    switch (sys->ui.screen) {
+                        case UI_MENU:           nav_menu(evt);           break;
+                        case UI_SETTING:        nav_setting(evt);        break;
+                        case UI_RUN:            nav_run(evt);            break;
+                        case UI_SELECT_CHANNEL: nav_select_channel(evt); break;
                     }
-                    case BTN_LEFT_PIN:
-                    {
-                        printf("LEFT pressed\t");
-                        //system_event_t ev = EVENT_FLOW_DEC;
-                        //xQueueSend(g_change_sys, &ev, 0);
-                        break;
-                    }
-                    case BTN_RIGHT_PIN:
-                    {
-                        printf("RIGHT pressed\t");
-                        //system_event_t ev = EVENT_FLOW_INC;
-                        //xQueueSend(g_change_sys, &ev, 0);
-                        break;
-                    }case BTN_UP_PIN:
-                    {
-                        printf("UP pressed\t");
-                        //system_event_t ev = EVENT_FLOW_INC;
-                        //xQueueSend(g_change_sys, &ev, 0);
-                        break;
-                    }case BTN_DOWN_PIN:
-                    {
-                        printf("DOWN pressed\t");
-                        //system_event_t ev = EVENT_FLOW_INC;
-                        //xQueueSend(g_change_sys, &ev, 0);
-                        break;
-                    }
+                    tft_unlock();
+                } else {
+                    ESP_LOGE(TAG, "Failed to lock LVGL for navigation!");
                 }
 
-                while(gpio_get_level(gpio_num) == 0) {
-                    vTaskDelay(pdMS_TO_TICKS(10)); // Ngủ 10ms rồi kiểm tra lại
-                }
+                // Debounce sau khi xử lý sự kiện nhấn để tránh hiện tượng double click ngoài ý muốn
+                vTaskDelay(pdMS_TO_TICKS(200));
 
-                xQueueReset(g_button_queue);
+                // Cập nhật lại prev_state sau khi kết thúc debounce
+                uint8_t current_state = 0xFF;
+                if (pcf8574_read(&current_state) == ESP_OK) {
+                    prev_state = current_state;
+                }
+                break;
             }
         }
     }

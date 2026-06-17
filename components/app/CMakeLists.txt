@@ -8,5 +8,14 @@ idf_component_register(
         "pump_channel"
         "pump_manager"
         "unit_converter"
-    REQUIRES driver freertos esp_driver_gpio drivers motion domain esp_timer
+    REQUIRES 
+    driver 
+    freertos 
+    esp_driver_gpio 
+    drivers 
+    motion 
+    domain 
+    esp_timer 
+    drivers
+    json
 )

@@ -2,7 +2,6 @@ idf_component_register(
     SRCS 
         "mqtt/mqtt.c"
         "storage/storage.c"
-        "ui/ui.c"
     INCLUDE_DIRS 
         "." 
         "mqtt"

@@ -1,0 +1,16 @@
+# ESP-IDF Build outputs
+build/
+sdkconfig.old
+
+# Automatically managed components
+managed_components/
+dependencies.lock
+
+# Temporary and local files
+code.txt
+flash_log.txt
+Log/
+
+# Editor/IDE configurations
+.vscode/
+.clangd/

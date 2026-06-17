@@ -1,6 +1,6 @@
 #include "as5600.h"
 
-as5600_t as5600;
+// as5600_t as5600;
 
 esp_err_t as5600_init(as5600_t *sensor, i2c_master_dev_handle_t dev){
     sensor ->dev = dev;
@@ -138,12 +138,15 @@ esp_err_t as5600_disable_filter(as5600_t *sensor)
 
 }
 
-void i2c_master_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_t *dev_handle)
+void i2c_master_init(i2c_master_bus_handle_t *bus_handle,
+     i2c_master_dev_handle_t *dev_handle,
+     i2c_port_t port,
+     int sda, int scl)
 {
     i2c_master_bus_config_t bus_config = {
-        .i2c_port = I2C_MASTER_NUM,
-        .sda_io_num = I2C_MASTER_SDA_IO,
-        .scl_io_num = I2C_MASTER_SCL_IO,
+        .i2c_port = port,
+        .sda_io_num = sda,
+        .scl_io_num = scl,
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,
@@ -156,32 +159,43 @@ void i2c_master_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_
     };
     ESP_ERROR_CHECK(i2c_master_bus_add_device(*bus_handle, &dev_config, dev_handle));
 }   
+void as5600_logic_reset(as5600_logic_t *logic) {
+    logic->last_raw_degree = 0.0f;
+    logic->accumulated_angle = 0.0f;
+    logic->is_started = false;
+}
 
-void read_angle_task(void *arg){
-    i2c_master_bus_handle_t bus;
-    i2c_master_dev_handle_t dev;
+void as5600_process_multi_turn(as5600_t *dev, as5600_logic_t *logic, float *display_angle, bool is_running) {
+    uint16_t raw_int;
+    if (as5600_read_angle(dev, &raw_int) != ESP_OK) return;
 
-    i2c_master_init(&bus, &dev);
+    float current_raw = raw_int * 360.0f / 4096.0f;
+    logic->last_raw = raw_int; 
+    if (is_running) {
+        // Lấy điểm Zero khi bắt đầu chạy
+        if (!logic->is_started) {
+            logic->last_raw_degree = current_raw;
+            logic->accumulated_angle = 0.0f;
+            logic->is_started = true;
+        }
 
-    as5600_init(&as5600, dev);
+        // Tính Delta (last - current để đảo chiều, giúp ANGLE dương giống Degree_cal)
+        float delta = current_raw - logic->last_raw_degree;
 
-    as5600_config_slow_filter(&as5600);
-    as5600_disable_filter(&as5600);
-    while(1){
-        uint16_t angle;
-        uint16_t raw;
-        uint8_t status;
-        float angle_degree;
+        // Xử lý bù vòng khi qua điểm 0/360
+        if (delta > 180.0f)  delta -= 360.0f;
+        else if (delta < -180.0f) delta += 360.0f;
 
-        as5600_read_raw_angle(&as5600, &raw);
-        as5600_read_angle(&as5600, &angle);
-        as5600_read_status(&as5600, &status);
-        
-        angle_degree = angle*360.0f/4096.0f;
+        logic->accumulated_angle += delta;
+        logic->last_raw_degree = current_raw;
+    } else {
+        // Reset flag khi dừng để lần sau lấy offset mới
+        logic->is_started = false;
+        logic->accumulated_angle = 0.0f;
+    }
 
-        printf("RAW=%u  ANGLE=%u  STATUS=0x%02X ANGLE(degree)=%.3f\n",
-               raw, angle, status, angle_degree);
-
-        vTaskDelay(pdMS_TO_TICKS(100));
+    // Trả kết quả về biến display_angle của người dùng
+    if (display_angle) {
+        *display_angle = logic->accumulated_angle;
     }
 }

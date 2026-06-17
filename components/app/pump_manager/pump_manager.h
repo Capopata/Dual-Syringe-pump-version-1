@@ -4,18 +4,18 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "pump_channel.h"
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
+#include "as5600.h"
+#include "tmc2209.h"
 #include "domain.h"
+#include "pcf8574.h"
+#include "io_config.h"
 
-#define CH0_STEP_PIN 16
-#define CH0_DIR_PIN  4
-#define CH0_EN_PIN   19
 
-#define CH1_STEP_PIN 22
-#define CH1_DIR_PIN  23
-#define CH1_EN_PIN   25
+extern SemaphoreHandle_t i2c_bus_ch0_mutex;
 
 /**
  * @brief Khởi tạo quản lý bơm, liên kết hardware handles với system state
@@ -42,5 +42,12 @@ void pump_manager_start_channel(uint8_t channel_id);
  * @brief Task quản lý logic liên tầng (Sequential trigger) và giám sát
  */
 void pump_manager_task(void *pvParameters);
+void pump_manager_home_channel(uint8_t channel_id);
+void pump_manager_home_all(void);
+void log_task(void *pvParameters);
+void sensor_task(void *pvParameters);
+void uart_cmd_task(void *pvParameters);
 
 #endif
+
+
