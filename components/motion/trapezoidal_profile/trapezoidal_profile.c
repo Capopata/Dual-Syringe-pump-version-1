@@ -19,9 +19,9 @@ void profile_init(trapezoidal_profile_t *p, float accel, float max_speed){
 
 }
 
-void profile_move_to(trapezoidal_profile_t *p, long absolute_pos){
-    if(p->target_pos != absolute_pos){
-        p->target_pos = absolute_pos;
+void profile_move_to(trapezoidal_profile_t *p, long target_pos){
+    if(p->target_pos != target_pos){
+        p->target_pos = target_pos;
         // if motor stand still, reset n to start acceleration
         if(p->current_speed == 0.0){
             p->n = 0;

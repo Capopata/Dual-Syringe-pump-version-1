@@ -48,7 +48,6 @@ typedef struct {
     TaskHandle_t calc_task_handle;
 
     int channel_id;
-    bool dir_inverted;
     bool is_initialized;
 
     uint8_t notify_div;
@@ -60,14 +59,6 @@ typedef struct {
 } stepper_hw_t;
 
 extern portMUX_TYPE motor_mux;
-
-/**
- * @brief Khởi tạo (nếu cần) và bắt đầu chạy motor
- * @param hw Con trỏ quản lý motor
- * @param step_p  STEP pin
- * @param dir_p  DIR pin
- * @param en_p  EN pin
- */
 
 void motor_prepare(stepper_hw_t *hw, int step_p, int dir_p, int en_p);
 void motor_fire(stepper_hw_t *hw);

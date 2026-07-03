@@ -87,10 +87,10 @@ void button_task(void *arg) {
                 if (!pcf_pin_to_event(pin, &evt)) continue;
 
                 ESP_LOGI(TAG, ">>> Button pressed: pin=%d event=%s screen=%d",
-                         pin, event_name(evt), sys->ui.screen);
+                         pin, event_name(evt), g_current_screen);
 
                 if (tft_lock(pdMS_TO_TICKS(100))) {
-                    switch (sys->ui.screen) {
+                    switch (g_current_screen) {
                         case UI_MENU:           nav_menu(evt);           break;
                         case UI_SETTING:        nav_setting(evt);        break;
                         case UI_RUN:            nav_run(evt);            break;

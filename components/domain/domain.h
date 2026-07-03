@@ -16,24 +16,8 @@ typedef enum{
     PUMP_DONE,
     PUMP_HOMING,
     PUMP_ERROR,
-
 } pump_state_t;
 
-//UI SCREEN
-typedef enum{
-    UI_MENU = 0,
-    UI_SETTING,
-    UI_RUN, 
-    UI_SELECT_CHANNEL,
-}ui_screen_t;   
-
-//profile state
-typedef enum {
-    PROFILE_IDLE = 0,
-    PROFILE_ACCEL,
-    PROFILE_CONST,
-    PROFILE_DECEL
-} profile_state_t;
 // SYSTEM OPERATION MODE
 typedef enum {
     SYS_MODE_INDEPENDENT = 0, // Đơn lẻ: Các kênh Start/Stop/Config hoàn toàn độc lập
@@ -43,21 +27,10 @@ typedef enum {
 } sys_op_mode_t;
 
 typedef enum{
-    EVENT_UP = 0,
-    EVENT_DOWN,
-    EVENT_LEFT, 
-    EVENT_RIGHT,
-    EVENT_SELECT
-}system_event_t;
-typedef enum{
     ALGO_TRAPEZOIDAL = 0,
     ALGO_TRAP_PID,
 }pump_algorithm_t;
-typedef struct {
-    float alpha;
-    float current_value;
-    bool is_init;
-} ema_filter_t;
+
 // CHANNEL STATE
 typedef struct {
     // --- Configuration (Thông số cài đặt) ---
@@ -65,7 +38,6 @@ typedef struct {
     float flow_setpoint;  //ml/h
     
     // --- Motion Profile Settings ---
-    float target_velocity;  // max velocity (mm/s)
     float acceleration;     // for smooth (mm/s^2)
 
     // --- Runtime Status (Trạng thái khi đang chạy) ---
@@ -79,47 +51,22 @@ typedef struct {
     
     // --- Hardware Mapping (Cụ thể cho Step Motor) ---
     uint32_t current_steps;
-    uint32_t target_steps;
-    uint32_t accel_steps;   // Điểm kết thúc quá trình gia tốc
-    uint32_t decel_steps;   // Điểm bắt đầu quá trình giảm tốc
 
     pump_state_t state;           // Trạng thái tổng quát của kênh
-    profile_state_t profile_state; // Trạng thái cụ thể của profile chuyển động
     bool is_running;
-    volatile int32_t last_sensor_raw;
-    volatile int32_t prev_sensor_raw;
-    int32_t raw_threshold;
 
-    float    volume_commanded;   // Từ step counter
-    float    flow_commanded;     // Từ interval
-
-    // Nguồn từ AS5600 (dùng để hiển thị / feedback)
-    float    volume_measured;    // Từ AS5600
-    float    flow_measured;      // Từ AS5600
-    float    sensor_angle;       // Raw angle tích lũy
     float kp;
     float ki;
     float kd;
-
-    float offset;
 } pump_channel_t;
-
-// UI STATE
-typedef struct {
-    ui_screen_t screen;
-    uint8_t selected_channel;
-    float editing_value;
-    bool is_editing;        
-} ui_state_t;
 
 // SYSTEM STATE
 typedef struct {
     pump_channel_t channels[MAX_CHANNEL];
-    system_event_t sys_evt;
-    ui_state_t ui;
+    uint8_t selected_channel;
     TaskHandle_t manager_task_handle;
     sys_op_mode_t op_mode;    // Chế độ phối hợp các kênh
-    bool is_system_running;   // Flag tổng (hữu ích cho chế độ Đồng thời/Liên tiếp)
+    bool is_system_running;   // Flag tổng 
 } system_state_t;
 
 // ===== API =====

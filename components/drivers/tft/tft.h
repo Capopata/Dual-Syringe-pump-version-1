@@ -45,6 +45,29 @@
 #define VOL_STEP            0.1f    // Bước chỉnh volume (ml)
 
 // ============================================================
+//  UI Events
+// ============================================================
+typedef enum{
+    EVENT_UP = 0,
+    EVENT_DOWN,
+    EVENT_LEFT, 
+    EVENT_RIGHT,
+    EVENT_SELECT
+}system_event_t;
+
+// ============================================================
+//  UI Screen state enum and helper functions
+// ============================================================
+typedef enum{
+    UI_MENU = 0,
+    UI_SETTING,
+    UI_RUN, 
+    UI_SELECT_CHANNEL,
+}ui_screen_t;
+
+extern ui_screen_t g_current_screen;
+
+// ============================================================
 //  KHỞI TẠO & TASK
 // ============================================================
 

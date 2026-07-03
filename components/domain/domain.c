@@ -10,11 +10,8 @@ void system_state_init(void){
     // Clear trash in ram by memset (set all by 0)
     memset(&g_system_state, 0, sizeof(system_state_t));
 
-    // Set default value for UI
-    g_system_state.ui.screen = UI_MENU;
-    g_system_state.ui.selected_channel = 0;
-    g_system_state.ui.editing_value = 0.0f;
-    g_system_state.ui.is_editing = false;
+    // Set default value for system state
+    g_system_state.selected_channel = 0;
 
     // set default value for system
     g_system_state.op_mode = SYS_MODE_INDEPENDENT;
@@ -28,7 +25,7 @@ void system_state_init(void){
     }
 }
 
-//Return pointer manage system
+//Return pointer manage system - Hàm truy xuất
 system_state_t* system_get(void){
     return &g_system_state;
 }
@@ -47,11 +44,6 @@ void system_reset_channel(uint8_t ch){
 
     // --- Reset Hardware Mapping ---
     g_system_state.channels[ch].current_steps = 0;
-    
-    // Lưu ý: target_steps, accel_steps, decel_steps thường được tính toán lại
-    // bởi module Converter dựa trên volume_target, nên ta có thể để nguyên hoặc set 0 tùy logic.
-
     // --- Reset States ---
     g_system_state.channels[ch].state = PUMP_IDLE;
-    g_system_state.channels[ch].profile_state = PROFILE_IDLE;
 }

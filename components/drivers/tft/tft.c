@@ -22,6 +22,8 @@ static lv_color_t             s_buf1[LCD_H_RES * LCD_DRAW_BUFF_LINES];
 static lv_color_t             s_buf2[LCD_H_RES * LCD_DRAW_BUFF_LINES];
 static SemaphoreHandle_t      s_lvgl_mux    = NULL;
 
+ui_screen_t g_current_screen = UI_MENU;
+
 // ============================================================
 //  Màn hình LVGL
 // ============================================================
@@ -539,7 +541,7 @@ void tft_init(void)
 void tft_show_menu(void)
 {
     if (!s_scr_menu) _create_menu();
-    system_get()->ui.screen = UI_MENU;
+    g_current_screen = UI_MENU;
     ESP_LOGI("TFT", "loading screen %p, active=%p", s_scr_menu, lv_scr_act());
     lv_scr_load(s_scr_menu);
     ESP_LOGI("TFT", "after load active=%p", lv_scr_act());
@@ -548,7 +550,7 @@ void tft_show_menu(void)
 void tft_show_setting(void)
 {
     if (!s_scr_setting) _create_setting();
-    system_get()->ui.screen = UI_SETTING;
+    g_current_screen = UI_SETTING;
     // Reset về ô đầu tiên mỗi lần vào Setting
     s_setting_row = 0;
     tft_update_setting_screen(system_get());
@@ -558,7 +560,7 @@ void tft_show_setting(void)
 void tft_show_run(void)
 {
     if (!s_scr_run) _create_run();
-    system_get()->ui.screen = UI_RUN;
+    g_current_screen = UI_RUN;
     tft_update_run_screen(system_get());
     lv_scr_load(s_scr_run);
 }
@@ -603,7 +605,7 @@ void tft_update_select_channel_screen(const system_state_t *sys)
     if (!s_scr_select) return;
     if (xSemaphoreTakeRecursive(s_lvgl_mux, pdMS_TO_TICKS(20)) != pdTRUE) return;
 
-    uint8_t sel = sys->ui.selected_channel;
+    uint8_t sel = sys->selected_channel;
     for (int ch = 0; ch < 2; ch++) {
         if (ch == sel) {
             lv_obj_set_style_border_color(s_ch_cards[ch], COLOR_HIGHLIGHT, 0);
@@ -622,7 +624,7 @@ void tft_update_select_channel_screen(const system_state_t *sys)
 void tft_show_select_channel(void)
 {
     if (!s_scr_select) _create_select_channel();
-    system_get()->ui.screen = UI_SELECT_CHANNEL;
+    g_current_screen = UI_SELECT_CHANNEL;
     tft_update_select_channel_screen(system_get());
     lv_scr_load(s_scr_select);
 }
@@ -739,24 +741,27 @@ void nav_menu(system_event_t evt) {
         lv_obj_set_pos(s_menu_cursor, 8, 26 + s_menu_row * 46);
         ESP_LOGI(TAG_NAV, "[MENU] DOWN → row=%d", s_menu_row);
     } else if (evt == EVENT_SELECT) {
-        if (s_menu_row == 0) {
-            sys->op_mode = SYS_MODE_INDEPENDENT;
-            sys->ui.screen = UI_SELECT_CHANNEL;
-            ESP_LOGI(TAG_NAV, "[MENU] SELECT (INDEP) → UI_SELECT_CHANNEL");
-            tft_show_select_channel();
-        } else if (s_menu_row == 1) {
-            sys->op_mode = SYS_MODE_SIMULTANEOUS;
-            ESP_LOGI(TAG_NAV, "[MENU] SELECT (SIMUL) → tft_show_run");
-            tft_show_run();
-        } else if (s_menu_row == 2) {
-            sys->op_mode = SYS_MODE_SEQUENTIAL;
-            ESP_LOGI(TAG_NAV, "[MENU] SELECT (SEQ) → tft_show_run");
-            tft_show_run();
-        } else if (s_menu_row == 3) {
-            sys->op_mode = SYS_MODE_HOMING;
-            sys->ui.screen = UI_SELECT_CHANNEL;
-            ESP_LOGI(TAG_NAV, "[MENU] SELECT (HOMING) → UI_SELECT_CHANNEL");
-            tft_show_select_channel();
+        if(xSemaphoreTake(sys_state_mutex, pdMS_TO_TICKS(50)) == pdTRUE){
+            if (s_menu_row == 0) {
+                sys->op_mode = SYS_MODE_INDEPENDENT;
+                g_current_screen = UI_SELECT_CHANNEL;
+                ESP_LOGI(TAG_NAV, "[MENU] SELECT (INDEP) → UI_SELECT_CHANNEL");
+                tft_show_select_channel();
+            } else if (s_menu_row == 1) {
+                sys->op_mode = SYS_MODE_SIMULTANEOUS;
+                ESP_LOGI(TAG_NAV, "[MENU] SELECT (SIMUL) → tft_show_run");
+                tft_show_run();
+            } else if (s_menu_row == 2) {
+                sys->op_mode = SYS_MODE_SEQUENTIAL;
+                ESP_LOGI(TAG_NAV, "[MENU] SELECT (SEQ) → tft_show_run");
+                tft_show_run();
+            } else if (s_menu_row == 3) {
+                sys->op_mode = SYS_MODE_HOMING;
+                g_current_screen = UI_SELECT_CHANNEL;
+                ESP_LOGI(TAG_NAV, "[MENU] SELECT (HOMING) → UI_SELECT_CHANNEL");
+                tft_show_select_channel();
+            }
+            xSemaphoreGive(sys_state_mutex);
         }
     } else if (evt == EVENT_RIGHT) {
         ESP_LOGI(TAG_NAV, "[MENU] RIGHT → tft_show_setting");
@@ -769,34 +774,37 @@ void nav_setting(system_event_t evt) {
     uint8_t cur_ch  = (s_setting_row < 2) ? 0 : 1;
     uint8_t cur_row = s_setting_row % 2;
 
-    if (evt == EVENT_UP) {
-        if (cur_row == 0) {
-            sys->channels[cur_ch].flow_setpoint += FLOW_STEP;
-            ESP_LOGI(TAG_NAV, "[SETTING] UP flow ch%d → %.3f", cur_ch, sys->channels[cur_ch].flow_setpoint);
-        } else {
-            sys->channels[cur_ch].volume_target += VOL_STEP;
-            ESP_LOGI(TAG_NAV, "[SETTING] UP vol  ch%d → %.2f", cur_ch, sys->channels[cur_ch].volume_target);
+    if(xSemaphoreTake(sys_state_mutex, pdMS_TO_TICKS(50)) == pdTRUE){
+        if (evt == EVENT_UP) {
+            if (cur_row == 0) {
+                sys->channels[cur_ch].flow_setpoint += FLOW_STEP;
+                ESP_LOGI(TAG_NAV, "[SETTING] UP flow ch%d → %.3f", cur_ch, sys->channels[cur_ch].flow_setpoint);
+            } else {
+                sys->channels[cur_ch].volume_target += VOL_STEP;
+                ESP_LOGI(TAG_NAV, "[SETTING] UP vol  ch%d → %.2f", cur_ch, sys->channels[cur_ch].volume_target);
+            }
+        } else if (evt == EVENT_DOWN) {
+            if (cur_row == 0) {
+                sys->channels[cur_ch].flow_setpoint -= FLOW_STEP;
+                if (sys->channels[cur_ch].flow_setpoint < 0.001f) sys->channels[cur_ch].flow_setpoint = 0.001f;
+                ESP_LOGI(TAG_NAV, "[SETTING] DOWN flow ch%d → %.3f", cur_ch, sys->channels[cur_ch].flow_setpoint);
+            } else {
+                sys->channels[cur_ch].volume_target -= VOL_STEP;
+                if (sys->channels[cur_ch].volume_target < 0.1f) sys->channels[cur_ch].volume_target = 0.1f;
+                ESP_LOGI(TAG_NAV, "[SETTING] DOWN vol  ch%d → %.2f", cur_ch, sys->channels[cur_ch].volume_target);
+            }
+        } else if (evt == EVENT_RIGHT) {
+            s_setting_row = (s_setting_row + 1) % 4;
+            ESP_LOGI(TAG_NAV, "[SETTING] RIGHT → row=%d (ch%d)", s_setting_row, (s_setting_row < 2) ? 0 : 1);
+        } else if (evt == EVENT_LEFT) {
+            s_setting_row = (s_setting_row + 3) % 4;
+            ESP_LOGI(TAG_NAV, "[SETTING] LEFT  → row=%d (ch%d)", s_setting_row, (s_setting_row < 2) ? 0 : 1);
+        } else if (evt == EVENT_SELECT) {
+            ESP_LOGI(TAG_NAV, "[SETTING] SELECT → tft_show_menu");
+            tft_show_menu();
+            return;
         }
-    } else if (evt == EVENT_DOWN) {
-        if (cur_row == 0) {
-            sys->channels[cur_ch].flow_setpoint -= FLOW_STEP;
-            if (sys->channels[cur_ch].flow_setpoint < 0.001f) sys->channels[cur_ch].flow_setpoint = 0.001f;
-            ESP_LOGI(TAG_NAV, "[SETTING] DOWN flow ch%d → %.3f", cur_ch, sys->channels[cur_ch].flow_setpoint);
-        } else {
-            sys->channels[cur_ch].volume_target -= VOL_STEP;
-            if (sys->channels[cur_ch].volume_target < 0.1f) sys->channels[cur_ch].volume_target = 0.1f;
-            ESP_LOGI(TAG_NAV, "[SETTING] DOWN vol  ch%d → %.2f", cur_ch, sys->channels[cur_ch].volume_target);
-        }
-    } else if (evt == EVENT_RIGHT) {
-        s_setting_row = (s_setting_row + 1) % 4;
-        ESP_LOGI(TAG_NAV, "[SETTING] RIGHT → row=%d (ch%d)", s_setting_row, (s_setting_row < 2) ? 0 : 1);
-    } else if (evt == EVENT_LEFT) {
-        s_setting_row = (s_setting_row + 3) % 4;
-        ESP_LOGI(TAG_NAV, "[SETTING] LEFT  → row=%d (ch%d)", s_setting_row, (s_setting_row < 2) ? 0 : 1);
-    } else if (evt == EVENT_SELECT) {
-        ESP_LOGI(TAG_NAV, "[SETTING] SELECT → tft_show_menu");
-        tft_show_menu();
-        return;
+        xSemaphoreGive(sys_state_mutex);
     }
 
     tft_update_setting_screen(sys);
@@ -806,12 +814,17 @@ void nav_setting(system_event_t evt) {
 void nav_run(system_event_t evt) {
     system_state_t *sys = system_get();
     if (evt == EVENT_SELECT) {
-        if (!sys->is_system_running) {
-            ESP_LOGI(TAG_NAV, "[RUN] SELECT → pump_manager_system_start");
-            pump_manager_system_start();
+        if (xSemaphoreTake(sys_state_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            if (!sys->is_system_running) {
+                ESP_LOGI(TAG_NAV, "[RUN] SELECT → pump_manager_system_start");
+                pump_manager_system_start();
+            } else {
+                ESP_LOGI(TAG_NAV, "[RUN] SELECT → pump_manager_system_stop");
+                pump_manager_system_stop();
+            }
+            xSemaphoreGive(sys_state_mutex);
         } else {
-            ESP_LOGI(TAG_NAV, "[RUN] SELECT → pump_manager_system_stop");
-            pump_manager_system_stop();
+            ESP_LOGE(TAG_NAV, "nav_run: Failed to acquire sys_state_mutex");
         }
         if (xSemaphoreTakeRecursive(s_lvgl_mux, pdMS_TO_TICKS(50)) == pdTRUE) {
             lv_label_set_text(s_sys_status_label,
@@ -830,17 +843,22 @@ void nav_run(system_event_t evt) {
 }
 void nav_select_channel(system_event_t evt) {
     system_state_t *sys = system_get();
-    if (evt == EVENT_LEFT || evt == EVENT_RIGHT) {
-        sys->ui.selected_channel ^= 1;
-        ESP_LOGI(TAG_NAV, "[SEL_CH] LEFT/RIGHT → selected_channel=%d", sys->ui.selected_channel);
-        tft_update_select_channel_screen(sys);
-    } else if (evt == EVENT_SELECT) {
-        if (sys->op_mode == SYS_MODE_HOMING) {
-            sys->is_system_running = true;
-            pump_manager_home_channel(sys->ui.selected_channel);
+    if (xSemaphoreTake(sys_state_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        if (evt == EVENT_LEFT || evt == EVENT_RIGHT) {
+            sys->selected_channel ^= 1;
+            ESP_LOGI(TAG_NAV, "[SEL_CH] LEFT/RIGHT → selected_channel=%d", sys->selected_channel);
+            tft_update_select_channel_screen(sys);
+        } else if (evt == EVENT_SELECT) {
+            if (sys->op_mode == SYS_MODE_HOMING) {
+                sys->is_system_running = true;
+                pump_manager_home_channel(sys->selected_channel);
+            }
+            ESP_LOGI(TAG_NAV, "[SEL_CH] SELECT → tft_show_run");
+            tft_show_run();
         }
-        ESP_LOGI(TAG_NAV, "[SEL_CH] SELECT → tft_show_run");
-        tft_show_run();
+        xSemaphoreGive(sys_state_mutex);
+    } else {
+        ESP_LOGE(TAG_NAV, "nav_select_channel: Failed to acquire sys_state_mutex");
     }
     // Lưu ý: nhánh EVENT_LEFT trùng với nhánh đầu — xem ghi chú bên dưới
 }
@@ -852,7 +870,7 @@ void tft_lvgl_task(void *pvParameters)
 {
     ESP_LOGI("TFT", "LVGL task started");
 
-    // Khởi tạo và hiển thị màn hình menu đầu tiên một cách an toàn
+    // Khởi tạo và hiển thị màn hình menu đầu tiên một cách an sau
     if (xSemaphoreTakeRecursive(s_lvgl_mux, portMAX_DELAY) == pdTRUE) {
         tft_show_menu();
         xSemaphoreGiveRecursive(s_lvgl_mux);
@@ -867,7 +885,7 @@ void tft_lvgl_task(void *pvParameters)
             system_state_t *sys = system_get();
             
             // Tự động cập nhật màn hình RUN mỗi 500ms khi đang ở màn hình RUN
-            if (sys->ui.screen == UI_RUN && (now - last_update >= 500)) {
+            if (g_current_screen == UI_RUN && (now - last_update >= 500)) {
                 tft_update_run_screen(sys);
                 last_update = now;
             }

@@ -22,7 +22,7 @@ typedef struct{
     float cn; //Time current interval (us)
     float c0; // Time start interval (us)
     long n; //count variable in ramp
-    float min_cn; //min time (max_speed)
+    float min_cn; //Thời gian tối thiểu tương ứng với vận tốc tối đa (max_speed)
 
 }trapezoidal_profile_t;
 

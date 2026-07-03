@@ -10,41 +10,6 @@ portMUX_TYPE motor_mux = portMUX_INITIALIZER_UNLOCKED;
 #define STEPS_PER_NOTIFY  10  // Notify mỗi 10 steps
 
 static void motor_handle_done(stepper_hw_t *hw, system_state_t *sys);
-
-
-static bool IRAM_ATTR stepper_isr_callback(
-    gptimer_handle_t timer,
-    const gptimer_alarm_event_data_t *data,
-    void *user_ctx)
-{
-    stepper_hw_t *hw = (stepper_hw_t *)user_ctx;
-
-    gpio_set_level(hw->step_pin, 1);
-    gpio_set_level(hw->step_pin, 0);
-    hw->profile.current_pos++; 
-
-    // Áp dụng interval đã được calc_task tính sẵn
-    uint32_t next = hw->next_interval;
-    if(next == 0) next = hw->current_interval;
-
-    gptimer_alarm_config_t alarm_config = {
-        .alarm_count = next,
-        .flags.auto_reload_on_alarm = true
-    };
-    gptimer_set_alarm_action(timer, &alarm_config);
-    hw->current_interval = next;
-
-    // Dùng notify_div đếm steps
-    hw->notify_div++;
-    BaseType_t hp = pdFALSE;
-    if(hw->notify_div >= STEPS_PER_NOTIFY){
-        hw->notify_div = 0;
-        if(hw->calc_task_handle != NULL)
-            vTaskNotifyGiveFromISR(hw->calc_task_handle, &hp);
-    }
-
-    return (hp == pdTRUE);
-}
 static void gpio_motor_init(stepper_hw_t *hw){
 
     gpio_config_t io_conf = {
@@ -78,6 +43,45 @@ static void step_timer_init(stepper_hw_t *hw){
 
     ESP_ERROR_CHECK(gptimer_enable(hw->timer_handle));
 }
+
+static bool IRAM_ATTR stepper_isr_callback(
+    gptimer_handle_t timer,
+    const gptimer_alarm_event_data_t *data,
+    void *user_ctx)
+{
+    stepper_hw_t *hw = (stepper_hw_t *)user_ctx;
+
+    gpio_set_level(hw->step_pin, 1);
+    gpio_set_level(hw->step_pin, 0);
+    
+    hw->profile.current_pos++; 
+
+    // Áp dụng khoảng thời gian (interval) tiếp theo đã được calc_task tính toán sẵn
+    uint32_t next = hw->next_interval;
+    // Nếu chưa có khoảng thời gian mới (bằng 0), giữ nguyên chu kỳ hiện tại
+    if(next == 0) next = hw->current_interval;
+
+    // Cấu hình lại sự kiện báo thức (alarm) cho GPTimer với chu kỳ tiếp theo
+    gptimer_alarm_config_t alarm_config = {
+        .alarm_count = next,
+        .flags.auto_reload_on_alarm = true
+    };
+    gptimer_set_alarm_action(timer, &alarm_config);
+    hw->current_interval = next;
+
+    // Dùng notify_div đếm steps
+    hw->notify_div++;
+    BaseType_t hp = pdFALSE;
+    if(hw->notify_div >= STEPS_PER_NOTIFY){
+        hw->notify_div = 0;
+        if(hw->calc_task_handle != NULL)
+            vTaskNotifyGiveFromISR(hw->calc_task_handle, &hp);
+    }
+
+    // Chuyển đổi ngữ cảnh nếu task tính toán có độ ưu tiên cao hơn được đánh thức
+    return (hp == pdTRUE);
+}
+
 static void pump_step_calc_task(void *pvParameters){
     stepper_hw_t *hw = (stepper_hw_t *)pvParameters;
     system_state_t *sys = system_get();
@@ -119,8 +123,6 @@ static void pump_step_calc_task(void *pvParameters){
                 interval = (uint32_t)new_interval;
             }
         }
-
-        // ← Luôn chạy, bất kể algo nào
         hw->next_interval = interval;
         hw->stats->current_steps = (uint32_t)hw->profile.current_pos;
         hw->stats->time_run = (float)(esp_timer_get_time() - hw->start_time_us) / 1e6f;
@@ -165,8 +167,7 @@ void motor_prepare(stepper_hw_t *hw, int step_p, int dir_p, int en_p){
     gptimer_stop(hw->timer_handle);
 
     hw->notify_div = 0;
-    //===================TÍNH TOÁN THỜI GIAN GIỮA CÁC GIAI ĐOẠN===================//
-    //float dynamic_K = get_dynamic_calib_factor(hw->channel_id, hw->stats->flow_setpoint);    
+    //===================TÍNH TOÁN THỜI GIAN GIỮA CÁC GIAI ĐOẠN===================//  
     uint32_t target_steps = (uint32_t)converter_ml_to_steps(hw->stats->volume_target);
     float max_v_steps = converter_flow_to_velocity_mms(hw->stats->flow_setpoint)*STEPS_PER_MM; // (mm/s * step/mm -> step/s)
     float accel_steps = hw->stats->acceleration * STEPS_PER_MM; //(mm/s^2 * steps/mm -> steps/s^2)
@@ -193,7 +194,7 @@ void motor_prepare(stepper_hw_t *hw, int step_p, int dir_p, int en_p){
         hw->stats->run_time_total = 0;
     }
 
-    //====================Khoiwr taoj trapezoidal profile====================//
+    //====================Khởi tạo trapezoidal profile====================//
     hw->stats->current_steps = 0;
     profile_init(&hw->profile, accel_steps, max_v_steps);
     //hw->profile.current_pos = (long)hw->stats->current_steps;
@@ -273,11 +274,8 @@ void motor_stop(stepper_hw_t *hw){
 
     //Reset trạng thái động cơ
     if(hw->stats != NULL){
-        portENTER_CRITICAL(&motor_mux);
         hw->stats->state = PUMP_IDLE;
         hw->stats->flow_actual = 0.0f;
-        hw->stats->velocity = 0.0f;
-        portEXIT_CRITICAL(&motor_mux);
     }
 
     ESP_LOGI("PUMP_CH", "Motor Channel %d Stopped", hw->channel_id);
