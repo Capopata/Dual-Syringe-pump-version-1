@@ -6,7 +6,6 @@
 #include <math.h>
 
 static const char *TAG = "PUMP_CH";
-portMUX_TYPE motor_mux = portMUX_INITIALIZER_UNLOCKED;
 #define STEPS_PER_NOTIFY  10  // Notify mỗi 10 steps
 
 static void motor_handle_done(stepper_hw_t *hw, system_state_t *sys);

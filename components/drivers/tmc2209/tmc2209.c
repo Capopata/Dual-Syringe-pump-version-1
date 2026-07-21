@@ -28,6 +28,18 @@ esp_err_t uart_init(uart_port_t port, int tx_pin, int rx_pin) {
 
     return ESP_OK;
 }
+void cmd_uart_init(void) {
+    uart_config_t cfg = {
+        .baud_rate  = CMD_UART_BAUD,
+        .data_bits  = UART_DATA_8_BITS,
+        .parity     = UART_PARITY_DISABLE,
+        .stop_bits  = UART_STOP_BITS_1,
+        .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
+    };
+    uart_param_config(CMD_UART_PORT, &cfg);
+    // UART0: TX=1, RX=3 — mặc định của ESP32, không cần set lại
+    uart_driver_install(CMD_UART_PORT, 1024, 0, 0, NULL, 0);
+}
 void uart_loopback_test(uart_port_t port, int tx_pin, int rx_pin) {
     // Nối vật lý TX_PIN với RX_PIN bằng dây jumper trước khi test này
     uint8_t tx_data[] = {0xAA, 0x55, 0x01, 0x02};

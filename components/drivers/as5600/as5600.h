@@ -27,6 +27,9 @@ typedef enum {
     AS5600_REG_MPOS_L     = 0x04,
     AS5600_REG_MANG_H     = 0x05,
     AS5600_REG_MANG_L     = 0x06,
+    /**
+     * h
+     */
     AS5600_REG_CONF_H    = 0x07,
     AS5600_REG_CONF_L    = 0x08,
     AS5600_REG_RAW_ANGLE_H = 0x0C,
@@ -43,6 +46,7 @@ typedef enum {
 typedef struct {
     i2c_master_dev_handle_t dev;
 }as5600_t;
+
 typedef struct {
     float last_raw_degree;
     float accumulated_angle;
@@ -53,7 +57,6 @@ typedef struct {
 // Hàm khởi tạo/reset logic
 void as5600_logic_reset(as5600_logic_t *logic);
 
-// Hàm xử lý chính
 void as5600_process_multi_turn(as5600_t *dev, as5600_logic_t *logic, float *display_angle, bool is_running);
 esp_err_t as5600_init(as5600_t *sensor, i2c_master_dev_handle_t dev);
 esp_err_t as5600_read_raw_angle(as5600_t *sensor, uint16_t *angle);

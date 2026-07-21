@@ -88,4 +88,5 @@ void check_chip_alive(uart_port_t port, uint8_t node_addr);
 void TMC2209_Check_DRV_STATUS(uart_port_t port, uint8_t node_addr);
 void TMC2209_Full_Report(uart_port_t port, uint8_t node_addr);
 void test_tmc_override(uart_port_t port, uint8_t node_addr);
+void cmd_uart_init(void);
 #endif

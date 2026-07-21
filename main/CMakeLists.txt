@@ -10,6 +10,4 @@ idf_component_register(
             esp_netif 
             app 
             domain 
-            drivers 
-            motion
 )

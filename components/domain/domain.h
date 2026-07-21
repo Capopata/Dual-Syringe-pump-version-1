@@ -1,6 +1,5 @@
 #pragma once
 #include "freertos/FreeRTOS.h"  
-#include "driver/gptimer.h"   
 #include "freertos/task.h" 
 #include <stdbool.h>
 #include <stdint.h>
@@ -52,8 +51,8 @@ typedef struct {
     // --- Hardware Mapping (Cụ thể cho Step Motor) ---
     uint32_t current_steps;
 
-    pump_state_t state;           // Trạng thái tổng quát của kênh
-    bool is_running;
+    volatile pump_state_t state;           // Trạng thái tổng quát của kênh
+    volatile bool is_running;
 
     float kp;
     float ki;

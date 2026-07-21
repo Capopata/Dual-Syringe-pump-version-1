@@ -62,6 +62,11 @@ esp_err_t as5600_read_status(as5600_t *sensor, uint8_t *status )
 
     return ESP_OK;
 }
+/**
+ * @brief Cấu hình bộ lọc của cảm biến AS5600 về mức 
+ * lọc chậm tối đa (SF = 16x) và tắt bộ lọc nhanh (FTH = slow only), đồng 
+ * thời giữ nguyên toàn bộ các cài đặt khác của cảm biến.
+ */
 esp_err_t as5600_config_slow_filter(as5600_t *sensor)
 {
     uint8_t reg = AS5600_REG_CONF_H;
@@ -81,9 +86,11 @@ esp_err_t as5600_config_slow_filter(as5600_t *sensor)
     conf = ((data[0]<<8))|data[1];
 
     // set SF = 16x time 2.2ms, revolution 0.015
+    // Đưa bit 8, 9 về 0
     conf &= ~(0x03 << 8);
 
     // set FTH = slow only
+    // Đưa bit 10, 11, 12 về 0
     conf &= ~(0x07 << 10);
 
     // write back conf
@@ -164,8 +171,14 @@ void as5600_logic_reset(as5600_logic_t *logic) {
     logic->accumulated_angle = 0.0f;
     logic->is_started = false;
 }
-
-void as5600_process_multi_turn(as5600_t *dev, as5600_logic_t *logic, float *display_angle, bool is_running) {
+/**
+ * @brief Tính toán và tích lũy góc quay qua nhiều vòng quay
+ * 
+ */
+void as5600_process_multi_turn(as5600_t *dev, 
+                                as5600_logic_t *logic, 
+                                float *display_angle, 
+                                bool is_running) {
     uint16_t raw_int;
     if (as5600_read_angle(dev, &raw_int) != ESP_OK) return;
 
@@ -194,8 +207,5 @@ void as5600_process_multi_turn(as5600_t *dev, as5600_logic_t *logic, float *disp
         logic->accumulated_angle = 0.0f;
     }
 
-    // Trả kết quả về biến display_angle của người dùng
-    if (display_angle) {
-        *display_angle = logic->accumulated_angle;
-    }
+    *display_angle = logic->accumulated_angle;
 }
