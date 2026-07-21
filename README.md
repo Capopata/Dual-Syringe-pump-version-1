@@ -1,220 +1,138 @@
-# Dual Syringe Pump ESP-IDF Firmware
+# Firmware Vi Bơm Đa Kênh (Dual Syringe Pump) ESP-IDF
 
-This repository contains the ESP-IDF based firmware for a high-precision **Dual Syringe Pump** system. The system controls two independent syringe channels driven by stepper motors with closed-loop PID control via magnetic encoders, featuring an interactive menu interface displayed on an ILI9341 TFT screen and buttons.
-
----
-
-## Table of Contents
-1. [Key Features](#1-key-features)
-2. [Hardware Architecture & Pinout](#2-hardware-architecture--pinout)
-3. [Software Structure](#3-software-structure)
-4. [Calibration & Conversions](#4-calibration--conversions)
-5. [UART Communication Protocol](#5-uart-communication-protocol)
-6. [Flashing & Monitoring Guide](#6-flashing--monitoring-guide)
+Kho lưu trữ này chứa mã nguồn firmware dựa trên framework ESP-IDF cho hệ thống **Vi Bơm Đa Kênh** độ chính xác cao. Hệ thống điều khiển hai kênh bơm tiêm hoạt động độc lập hoặc phối hợp, được truyền động bằng động cơ bước kết hợp điều khiển vòng kín PID thông qua cảm biến góc quay từ trường và điều khiển bằng tập lệnh thông qua cổng nối tiếp UART.
 
 ---
 
-## 1. Key Features
-
-- **Dual Syringe Control**: Controls two independent or coordinated syringe channels (`Channel 0` & `Channel 1`).
-- **Closed-Loop Control**: Combines an open-loop **Trapezoidal Motion Profiling** algorithm with closed-loop **PID Feedback** using **AS5600 Magnetic Encoders** to correct positioning errors in real time.
-- **Multiple Operation Modes**:
-  - `Independent`: Channels run completely independently with their own target volumes and flow rates.
-  - `Simultaneous`: Both channels start and stop synchronously; a fault in one channel halts both for safety.
-  - `Sequential`: Continuous infusion where Channel 1 starts automatically as soon as Channel 0 finishes.
-  - `Homing`: Carriage homing routine to calibrate physical start limits.
-- **Self-Healing I2C Watchdog**: Real-time communication watchdog for the PCF8574 button expander. If communication fails 3 consecutive times, it performs a dynamic I2C bus scan and re-registers the expander automatically to prevent system lockups.
-- **LVGL Graphical User Interface**: Renders real-time telemetry (flow rates, infused/target volumes, time elapsed, progress bar, and channel state) on an ILI9341 SPI TFT LCD screen using physical buttons for navigation.
+## Mục lục
+1. [Các tính năng chính](#1-các-tính-năng-chính)
+2. [Kiến trúc phần cứng & Sơ đồ chân](#2-kiến-trúc-phần-cứng--sơ-đồ-chân)
+3. [Cấu trúc phần mềm](#3-cấu-trúc-phần-mềm)
+4. [Quy đổi đơn vị](#4-quy-đổi-đơn-vị)
+5. [Giao thức truyền thông UART](#5-giao-thức-truyền-thông-uart)
 
 ---
 
-## 2. Hardware Architecture & Pinout
+## 1. Các tính năng chính
 
-The hardware is based on the **ESP32** microcontroller. Peripherals are mapped as defined in [io_config.h](file:///d:/pc/Documents/Micropump/Newversion/idf/Dual_Syringe_pump_idf/components/drivers/io_config.h) and detailed in [Noi_day.txt](file:///d:/pc/Documents/Micropump/Newversion/idf/Dual_Syringe_pump_idf/Noi_day.txt):
+- **Điều khiển 2 kênh**: Điều khiển độc lập hoặc phối hợp nhịp nhàng giữa hai kênh bơm tiêm (`Kênh 0` & `Kênh 1`).
+- **Điều khiển vòng kín**: Kết hợp giữa thuật toán sinh quỹ đạo chuyển động **Ramp hình thang** (chạy vòng hở) với bộ điều khiển phản hồi vòng kín **PID** sử dụng **Cảm biến góc từ trường AS5600** để tự động hiệu chỉnh sai số bước cơ khí theo thời gian thực.
+- **Chế độ hoạt động đa dạng**:
+  - `Independent` (Độc lập): Các kênh chạy độc lập với thể tích mục tiêu và tốc độ lưu lượng được cài đặt riêng biệt.
+  - `Simultaneous` (Đồng thời): Cả hai kênh bắt đầu và dừng lại cùng lúc; lỗi ở một kênh sẽ dừng cả hai kênh để đảm bảo an toàn.
+  - `Sequential` (Liên tiếp): Truyền dịch liên tục, Kênh 1 tự động chạy ngay sau khi Kênh 0 hoàn thành nhiệm vụ (`PUMP_DONE`).
+  - `Homing` (Về gốc): Quy trình chạy tìm giới hạn điểm gốc vật lý để hiệu chuẩn hành trình cơ khí.
 
-### Stepper Motor Drivers (TMC2209)
-Each channel is driven by a TMC2209 driver configured via step/dir pins and configured over a shared UART bus.
-- **Channel 0 Stepper Pins**:
+---
+
+## 2. Kiến trúc phần cứng & Sơ đồ chân
+
+Hệ thống phần cứng được phát triển dựa trên vi điều khiển **ESP32**. Sơ đồ chân của các thiết bị ngoại vi được cấu hình trong tệp [io_config.h](file:///d:/pc/Documents/Micropump/Newversion/idf/Dual_Syringe_pump_idf/components/drivers/io_config.h):
+
+### Driver động cơ bước (TMC2209)
+Mỗi kênh được điều khiển bằng một IC Driver TMC2209 thông qua các chân Step/Dir và được cấu hình dòng điện, vi bước qua bus UART dùng chung.
+- **Sơ đồ chân động cơ Kênh 0**:
   - `STEP`: GPIO 25
   - `DIR`: GPIO 2
   - `EN`: GPIO 27
-- **Channel 1 Stepper Pins**:
+- **Sơ đồ chân động cơ Kênh 1**:
   - `STEP`: GPIO 14
   - `DIR`: GPIO 13
   - `EN`: GPIO 17
-- **Shared UART (TMC2209 Communication)**:
+- **Giao tiếp UART dùng chung (TMC2209 Communication)**:
   - `UART Port`: UART1
   - `TX Pin`: GPIO 15
   - `RX Pin`: GPIO 26
-  - Node IDs: Channel 0 is Node `0`, Channel 1 is Node `1`
+  - Địa chỉ Node ID: Kênh 0 là Node `0`, Kênh 1 là Node `1`
 
-### Magnetic Position Encoders (AS5600)
-AS5600 magnetic encoders read the motor/plunger carriage rotation to verify actual delivery rates.
-- **Channel 0 AS5600**: I2C Bus 0 (`SDA` = GPIO 21, `SCL` = GPIO 22)
-- **Channel 1 AS5600**: I2C Bus 1 (`SDA` = GPIO 32, `SCL` = GPIO 33)
+### Cảm biến góc quay từ trường (AS5600)
+Cảm biến AS5600 đọc góc quay của trục động cơ hoặc trục vít me để giám sát và phản hồi tốc độ thực tế của pít-tông.
+- **AS5600 Kênh 0**: Kết nối bus I2C 0 (`SDA` = GPIO 21, `SCL` = GPIO 22)
+- **AS5600 Kênh 1**: Kết nối bus I2C 1 (`SDA` = GPIO 32, `SCL` = GPIO 33)
 
-### Button Input (PCF8574)
-Five physical navigation buttons are interfaced through a PCF8574 I2C I/O expander sharing **I2C Bus 0** (address `0x20`).
-- **Button Pin Mapping**:
-  - `UP`: Pin 0
-  - `SELECT`: Pin 1
-  - `RIGHT`: Pin 2
-  - `LEFT`: Pin 3
-  - `DOWN`: Pin 4
-
-### TFT Display (ILI9341)
-An SPI TFT LCD is used to render the LVGL interface.
-- **SPI Host**: SPI2 (VSPI)
-- **SCLK**: GPIO 18
-- **MOSI**: GPIO 23
-- **MISO**: GPIO 19
-- **DC (Data/Command)**: GPIO 16
-- **CS (Chip Select)**: GPIO 5
-- **RST (Reset)**: -1 (Unused/tied high)
-- **BK_LIGHT (Backlight)**: GPIO 12
-
-### Host UART Configuration
-- **UART Port**: UART0 (Default Debug & Command Port)
+### Cấu hình cổng UART máy chủ (Host UART)
+- **UART Port**: UART0 (Cổng Debug mặc định và nhận lệnh điều khiển)
 - **Baudrate**: 115200
-- **TX/RX**: ESP32 Default pins (GPIO 1 / GPIO 3)
+- **TX/RX**: Chân mặc định của ESP32 (GPIO 1 / GPIO 3)
 
 ---
 
-## 3. Software Structure
+## 3. Cấu trúc phần mềm
 
-The code is developed under the **ESP-IDF v5.x** framework:
+Chương trình được phát triển trên nền tảng framework **ESP-IDF v5.x**:
 
-- **`main/main.c`**: Entry point. Initializes state, starts the LVGL and button polling tasks.
+- **`main/main.c`**: Điểm khởi chạy chương trình. Khởi tạo trạng thái ban đầu của hệ thống và bắt đầu task quản lý bơm trung tâm.
+- **`components/domain`**:
+  - `domain.c/h`: Định nghĩa các cấu trúc dữ liệu chung (`system_state_t`) và hàm truy cập trạng thái hệ thống toàn cục.
 - **`components/app`**:
-  - `pump_channel`: Individual channel operations and status indicators.
-  - `pump_manager`: Logic coordinator for coordinate modes (Sequential/Simultaneous) and task scheduling.
-  - `unit_converter`: Standard equations for units translation.
+  - `pump_channel`: Điều khiển phát xung động cơ bước cấp thấp và cấu hình timer.
+  - `pump_manager`: Điều phối logic chuyển trạng thái giữa các chế độ bơm và phân tích cú pháp (parsing) tập lệnh nhận từ UART.
+  - `unit_converter`: Tập hợp các công thức quy đổi cơ học vật lý và đơn vị đo.
 - **`components/drivers`**:
-  - `as5600`: Multi-turn tracking and angle reporting.
-  - `button`: Expander polling interface with self-healing recovery.
-  - `tft`: SPI LCD configuration and LVGL driver bindings.
-  - `tmc2209`: Stepper settings.
+  - `as5600`: Trình điều khiển cảm biến góc từ trường đọc qua I2C và xử lý quay nhiều vòng.
+  - `tmc2209`: Trình cấu hình thanh ghi và tham số chạy của IC driver động cơ bước qua UART.
 - **`components/motion`**:
-  - `trapezoidal_profile`: Profile generation for acceleration/deceleration.
-- **`components/services`**:
-  - `error_handle`: Error diagnosis and safe shutdowns.
+  - `trapezoidal_profile`: Sinh quỹ đạo vận tốc hình thang cho động cơ.
+  - `PID`: Bộ điều khiển bù sai lệch của chu kỳ xung động cơ hiện tại so với setpoint.
 
 ---
 
-## 4. Calibration & Conversions
+## 4. Quy đổi đơn vị
 
-All translation constants are defined in [unit_converter.h](file:///d:/pc/Documents/Micropump/Newversion/idf/Dual_Syringe_pump_idf/components/app/unit_converter/unit_converter.h).
+Tất cả các hằng số quy đổi đơn vị được định nghĩa trong tệp [unit_converter.h](file:///d:/pc/Documents/Micropump/Newversion/idf/Dual_Syringe_pump_idf/components/app/unit_converter/unit_converter.h).
 
-### Volumetric to Stepper Translation
-The calibration constants in the firmware are tuned for a **1 mL syringe** with an inner diameter of **4.6 mm** (Cross-sectional Area = `16.619025 mm²`).
-- **Microstepping**: 256 microsteps/step (`51200` steps per revolution).
-- **Steps to Volumetric Equations**:
-  $$\text{Steps per mL} = 7701955.0$$
-  $$\text{mL per Step} \approx 0.000000129836$$
-  $$\text{Steps per Encoder Tick} = 12.5$$
-- **Linear Speed to Pulse Frequency**:
-  $$\text{Frequency (Hz)} = \text{Velocity (mm/s)} \times 128000.0$$
-
-### Look-up Table Dynamic Calibration
-Because friction and mechanical backlash affect volume accuracy differently at different flow speeds, the system uses dynamic calibration factor $K$ interpolation based on the target flow rate.
-
-**Calibration Tables:**
-```c
-// Channel 0 Look-up Table
-static const calib_point_t ch0_calib_table[] = {
-    {0.03f, 1.000f}, 
-    {0.06f, 0.987f}, 
-    {0.60f, 1.000f}, 
-    {1.50f, 0.955f}, 
-    {3.00f, 0.926f}  
-};
-
-// Channel 1 Look-up Table
-static const calib_point_t ch1_calib_table[] = {
-    {0.03f, 1.027f},
-    {0.06f, 0.955f},
-    {0.60f, 1.034f},
-    {1.50f, 0.968f},
-    {3.00f, 0.926f} 
-};
-```
-To recalibrate:
-1. Dispense a set volume (e.g. $0.6$ mL) at a test flow rate.
-2. Measure the actual weight/volume delivered.
-3. Compute the correction factor: $K = \frac{\text{Measured Volume}}{\text{Expected Volume}}$.
-4. Update the corresponding coefficient in `unit_converter.h`.
+### Quy đổi từ Thể tích sang Số bước xung
+Các hằng số hiệu chuẩn trong firmware được cấu hình tối ưu cho **Xi-lanh dung tích 1 mL** có đường kính trong là **4.6 mm** (Diện tích tiết diện = `16.619025 mm²`).
+- **Chế độ vi bước (Microstepping)**: 256 vi bước/bước (tương đương `51200` xung cho 1 vòng quay $360^\circ$).
+- **Công thức quy đổi Thể tích - Xung**:
+  $$\text{Số bước xung trên 1 mL} = 7701955.0$$
+  $$\text{Dung tích trên mỗi bước xung} \approx 0.000000129836 \text{ mL}$$
+  $$\text{Số bước xung trên mỗi tick Encoder} = 12.5$$
+- **Tốc độ di chuyển cơ khí sang Tần số phát xung**:
+  $$\text{Tần số (Hz)} = \text{Vận tốc (mm/s)} \times 128000.0$$
 
 ---
 
-## 5. UART Communication Protocol
+## 5. Giao thức truyền thông UART
 
-The ESP32 communicates with a host machine over UART0 using JSON format frames terminated with `\n`.
+ESP32 giao tiếp với máy tính hoặc HMI thông qua cổng UART0 bằng các gói dữ liệu dạng chuỗi JSON kết thúc bằng ký tự xuống dòng `\n`.
 
-### 1. Serial Commands (Host to ESP32)
+### 1. Tập lệnh điều khiển (Gửi từ Máy chủ tới ESP32)
 
-- **Start Independent Mode (`INDEP`):**
+- **Chạy chế độ Độc lập (`INDEP`):**
   ```json
   {"cmd": "START", "mode": "INDEP", "ch": 0, "flow": 0.5, "vol": 0.2}
   ```
-- **Start Simultaneous Mode (`SIMUL`):**
+- **Chạy chế độ Đồng thời (`SIMUL`):**
   ```json
   {"cmd": "START", "mode": "SIMUL", "flow": 1.0, "vol": 0.5}
   ```
-- **Start Sequential Mode (`SEQ`):**
+- **Chạy chế độ Liên tiếp (`SEQ`):**
   ```json
   {"cmd": "START", "mode": "SEQ", "ch0_flow": 0.5, "ch0_vol": 0.2, "ch1_flow": 1.0, "ch1_vol": 0.5}
   ```
-- **Stop Infusion:**
-  - Stop specific channel:
+- **Dừng bơm (Stop):**
+  - Dừng riêng một kênh:
     ```json
     {"cmd": "STOP", "ch": 0}
     ```
-  - Stop all channels immediately:
+  - Dừng khẩn cấp toàn bộ các kênh ngay lập tức:
     ```json
     {"cmd": "STOP"}
     ```
-- **Home Plunger Carriage:**
-  - Home specific channel:
+- **Chạy về gốc (Homing):**
+  - Về gốc cho một kênh riêng biệt:
     ```json
     {"cmd": "HOME", "ch": 1}
     ```
-  - Home all channels:
+  - Về gốc cho cả hai kênh:
     ```json
     {"cmd": "HOME"}
     ```
 
-### 2. Device Telemetry (ESP32 to Host)
-Every 1 second, the ESP32 outputs telemetry details for each active channel:
+### 2. Gói tin giám sát (ESP32 gửi lên Máy chủ)
+Định kỳ mỗi 1 giây, ESP32 sẽ tự động gửi gói tin JSON cập nhật thông số chi tiết của từng kênh bơm đang hoạt động:
 ```json
 {"ch":0,"algo":"TRAP+PID","vol_infused":0.05214,"vol_target":0.20000,"flow_measure":0.49812,"flow_setpoint":0.50000,"time_run":12.0,"state":1,"steps":401524,"kp":1.20,"ki":0.05,"kd":0.10}
 ```
 
----
-
-## 6. Flashing & Monitoring Guide
-
-A Python monitor utility `plotter.py` is provided for terminal visualization and CSV recording.
-
-### Prerequisites
-Install Python 3 and the required dependencies:
-```bash
-pip install pyserial esptool rich
-```
-
-### Auto-Flashing
-Compile the firmware using `idf.py build`, then run the following command to auto-detect the ESP32 and flash:
-```bash
-python plotter.py --flash ./build
-```
-
-### Terminal Telemetry
-Run the plotter tool to open a live connection and render real-time progress tables:
-```bash
-python plotter.py
-```
-If you need to define the serial port manually:
-```bash
-python plotter.py --port COM3
-```
-
-All data packets are automatically saved to CSV files in the `./Log/` directory (e.g. `Log/pump_log_20260617_112450.csv`) for graphing and review.
