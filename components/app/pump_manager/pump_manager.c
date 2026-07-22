@@ -228,6 +228,9 @@ static void sensor_task(void *pvParameters) {
     static float prev_degree_measure_ch0;
     static float prev_degree_measure_ch1;
 
+    static uint32_t pid_counter = 0;
+    static uint32_t log_counter = 0;
+
     while(1) {
         float temp_angle0 = 0.0f;
         float temp_angle1 = 0.0f;
@@ -240,14 +243,15 @@ static void sensor_task(void *pvParameters) {
                                   &temp_angle1,
                                   sys->channels[1].is_running);
 
-        // Tính toán lưu lượng & thể tích định kỳ 1 giây (50 * 20ms = 1000ms)
-        static uint32_t calc_counter = 0;
-        calc_counter++;
-        if (calc_counter >= 50) {
-            calc_counter = 0;
+        pid_counter++;
+        log_counter++;
+
+        // 1. Chu kỳ tính toán lưu lượng và PID (100ms)
+        if (pid_counter >= 5) {
+            pid_counter = 0;
             
-            pump_manager_update_channel_stats(&sys->channels[0], temp_angle0, &prev_degree_measure_ch0, 1.0f);
-            pump_manager_update_channel_stats(&sys->channels[1], temp_angle1, &prev_degree_measure_ch1, 1.0f);
+            pump_manager_update_channel_stats(&sys->channels[0], temp_angle0, &prev_degree_measure_ch0, 0.1f);
+            pump_manager_update_channel_stats(&sys->channels[1], temp_angle1, &prev_degree_measure_ch1, 0.1f);
             
             for(int i = 0; i < MAX_CHANNEL; i++){
                 if(sys->channels[i].algorithm == ALGO_TRAP_PID &&
@@ -255,7 +259,11 @@ static void sensor_task(void *pvParameters) {
                     motors[i].pid_update_ready = true;
                 }
             }
+        }
 
+        // 2. Chu kỳ in log ra ngoài (1000ms / 1s)
+        if (log_counter >= 50) {
+            log_counter = 0;
             if (log_task_handle != NULL) {
                 xTaskNotifyGive(log_task_handle);
             }

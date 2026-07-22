@@ -3,6 +3,7 @@
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "trapezoidal_profile.h" // Sử dụng file bạn vừa gửi
 #include "unit_converter.h"
 #include "pid.h"
@@ -29,6 +30,8 @@
 #define INTERVAL_ABS_MIN        200     // µs (~5000 step/s, tuỳ driver)
 #define INTERVAL_ABS_MAX        1000000 // µs (1 step/s)
 // Cấu trúc chân và handle cho mỗi motor
+
+extern SemaphoreHandle_t sys_state_sema;
 typedef struct {
     gpio_num_t step_pin;
     gpio_num_t dir_pin;
@@ -50,7 +53,7 @@ typedef struct {
     int channel_id;
     bool is_initialized;
 
-    uint8_t notify_div;
+    volatile uint8_t notify_div;
 
     uint64_t start_time_us;
     volatile bool pid_update_ready;

@@ -155,7 +155,7 @@ void i2c_master_init(i2c_master_bus_handle_t *bus_handle,
         .sda_io_num = sda,
         .scl_io_num = scl,
         .clk_source = I2C_CLK_SRC_DEFAULT,
-        .glitch_ignore_cnt = 7,
+        .glitch_ignore_cnt = 7,//chống nhiễu
         .flags.enable_internal_pullup = true,
     };
     ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, bus_handle));
@@ -166,11 +166,6 @@ void i2c_master_init(i2c_master_bus_handle_t *bus_handle,
     };
     ESP_ERROR_CHECK(i2c_master_bus_add_device(*bus_handle, &dev_config, dev_handle));
 }   
-void as5600_logic_reset(as5600_logic_t *logic) {
-    logic->last_raw_degree = 0.0f;
-    logic->accumulated_angle = 0.0f;
-    logic->is_started = false;
-}
 /**
  * @brief Tính toán và tích lũy góc quay qua nhiều vòng quay
  * 

@@ -14,6 +14,7 @@ static void gpio_motor_init(stepper_hw_t *hw){
     gpio_config_t io_conf = {
         .mode = GPIO_MODE_OUTPUT,
         .intr_type = GPIO_INTR_DISABLE,
+        // lựa chọn chân step, dir, en
         .pin_bit_mask = (1ULL<<hw->step_pin)|
                         (1ULL<<hw->dir_pin)|
                         (1ULL<<hw->en_pin),
@@ -21,7 +22,7 @@ static void gpio_motor_init(stepper_hw_t *hw){
 
     ESP_ERROR_CHECK(gpio_config(&io_conf));
 
-    //set state of stepper 
+    // Điều khiển điện áp tại chân EN 
     gpio_set_level(hw->en_pin, 1);
 }
 
@@ -34,8 +35,9 @@ static void step_timer_init(stepper_hw_t *hw){
 
     ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &hw->timer_handle));
 
+    // Hàm ngắt khi có sự kiện alarm
     gptimer_event_callbacks_t cb = {
-        .on_alarm = stepper_isr_callback,
+        .on_alarm = stepper_isr_callback, 
     };
 
     ESP_ERROR_CHECK(gptimer_register_event_callbacks(hw->timer_handle, &cb, hw));
@@ -70,6 +72,8 @@ static bool IRAM_ATTR stepper_isr_callback(
 
     // Dùng notify_div đếm steps
     hw->notify_div++;
+
+    //biến chuyển đổi ngữ cảnh đánh thức task có mức độ ưu tiên cao hơn task đang bị tạm dừng trước đó
     BaseType_t hp = pdFALSE;
     if(hw->notify_div >= STEPS_PER_NOTIFY){
         hw->notify_div = 0;
@@ -77,7 +81,7 @@ static bool IRAM_ATTR stepper_isr_callback(
             vTaskNotifyGiveFromISR(hw->calc_task_handle, &hp);
     }
 
-    // Chuyển đổi ngữ cảnh nếu task tính toán có độ ưu tiên cao hơn được đánh thức
+    // Chuyển đổi ngữ cảnh thành công
     return (hp == pdTRUE);
 }
 
@@ -130,20 +134,24 @@ static void pump_step_calc_task(void *pvParameters){
 
 
 static void motor_handle_done(stepper_hw_t *hw, system_state_t *sys){
-    if(hw->stats->state == PUMP_HOMING){
-        hw->stats->current_steps  = 0;
-        hw->profile.current_pos   = 0;
-        hw->stats->volume_infused = 0.0f;
-        gpio_set_level(hw->en_pin, 1);
-        hw->stats->state = PUMP_IDLE;
-        ESP_LOGI(TAG, "CH%d homing complete", hw->channel_id);
-    } else {
-        hw->stats->current_steps = hw->profile.target_pos;
-        hw->stats->state = PUMP_DONE;
-        ESP_LOGI(TAG, "CH%d pump done", hw->channel_id);
+    if(sys_state_sema != NULL && xSemaphoreTake(sys_state_sema, portMAX_DELAY) == pdTRUE){
+        if(hw->stats->state == PUMP_HOMING){
+            hw->stats->current_steps  = 0;
+            hw->profile.current_pos   = 0;
+            hw->stats->volume_infused = 0.0f;
+            gpio_set_level(hw->en_pin, 1);
+            hw->stats->state = PUMP_IDLE;
+                ESP_LOGI(TAG, "CH%d homing complete", hw->channel_id);
+            } else {
+                hw->stats->current_steps = hw->profile.target_pos;
+                hw->stats->state = PUMP_DONE;
+                ESP_LOGI(TAG, "CH%d pump done", hw->channel_id);
+            }
+            xSemaphoreGive(sys_state_sema);
     }
     if(sys->manager_task_handle != NULL)
         xTaskNotifyGive(sys->manager_task_handle);
+
 }
 
 
@@ -209,7 +217,7 @@ void motor_prepare(stepper_hw_t *hw, int step_p, int dir_p, int en_p){
         hw->pid.Ki        = 0.25f;
         hw->pid.Kd        = 0.0f;
         hw->pid.tau       = 0.1f;
-        hw->pid.T         = 0.2f;
+        hw->pid.T         = 0.1f; // Đồng bộ chu kỳ trích mẫu 100ms
 
         // Output là hệ số tỉ lệ [-0.5 .. +0.5]
         hw->pid.limMinOut = -0.5f;
@@ -250,11 +258,10 @@ void motor_prepare(stepper_hw_t *hw, int step_p, int dir_p, int en_p){
 }
 void motor_fire(stepper_hw_t *hw){
     gptimer_alarm_config_t alarm_config = {
-        .alarm_count = hw->current_interval,
-        .flags.auto_reload_on_alarm = true,
+        .alarm_count = hw->current_interval, // Đặt thời gian kích hoạt alarm
+        .flags.auto_reload_on_alarm = true, // tự động nạp lại(reset về 0 khi có alarm)
     };
     ESP_ERROR_CHECK(gptimer_set_alarm_action(hw->timer_handle, &alarm_config));
-    gptimer_stop(hw->timer_handle);  // stop trước phòng trường hợp đang chạy
     ESP_LOGI(TAG, "Starting Trapezoidal profile...");
     ESP_ERROR_CHECK(gptimer_start(hw->timer_handle));
     
