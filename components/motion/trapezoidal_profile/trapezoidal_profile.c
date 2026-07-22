@@ -49,14 +49,9 @@ uint32_t profile_compute_nex_step_interval(trapezoidal_profile_t *p) {
     long steps_to_stop = (long)((p->current_speed * p->current_speed) / (2.0f * p->acceleration));
 
     // 2. Logic kiểm soát Ramp (Gia tốc / Giảm tốc)
-    if (distance_to > 0) { // Đi thuận
-        if (p->n > 0 && steps_to_stop >= distance_to) {
-            p->n = -steps_to_stop;
-        }
-    } else { // Đi nghịch
-        if (p->n > 0 && steps_to_stop >= -distance_to) {
-            p->n = -steps_to_stop;
-        }
+    long abs_distance = (distance_to > 0) ? distance_to : -distance_to;
+    if (p->n > 0 && steps_to_stop >= abs_distance) {
+        p->n = -steps_to_stop;
     }
 
     // Thuật toán David Austin - Tính time interval(cn) cho bước tiếp theo
@@ -69,6 +64,7 @@ uint32_t profile_compute_nex_step_interval(trapezoidal_profile_t *p) {
         if (denominator != 0.0f) {
             p->cn = p->cn - ((2.0f * p->cn) / denominator);
         }
+
 
         // Giới hạn tốc độ tối đa (min_cn)
         if (p->cn < p->min_cn) {
